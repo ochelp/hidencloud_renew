@@ -214,6 +214,44 @@ class HidenCloudBot:
         if token_input:
             self.csrf_token = token_input['value']
 
+    def normalize_url(self, url):
+        return urljoin(self.base_url, url)
+
+    def extract_invoice_links(self, soup):
+        invoice_links = []
+        for a in soup.find_all('a', href=True):
+            href = a['href']
+            if '/invoice/' in href and 'download' not in href:
+                invoice_links.append(self.normalize_url(href))
+        return sorted(set(invoice_links))
+
+    def try_handle_invoice_from_response(self, service_id, response):
+        if '/invoice/' in response.url:
+            self.log("⚡️ 续期成功，已跳转账单页，自动执行支付...")
+            self.perform_pay_from_html(response.text, response.url)
+            return True
+
+        soup_resp = BeautifulSoup(response.text, 'html.parser')
+        invoice_links = self.extract_invoice_links(soup_resp)
+        if invoice_links:
+            invoice_url = invoice_links[0]
+            self.log(f"🔗 在响应HTML中发现账单链接: {invoice_url}")
+            self.pay_single_invoice(invoice_url)
+            return True
+
+        err_div = soup_resp.find('div', class_=re.compile(r'(alert-danger|text-danger|error)'))
+        if err_div:
+            self.log(f"⚠️ 续期请求被服务端拒绝，页面提示: {err_div.get_text(strip=True)}")
+            return True
+
+        if response.status_code == 419:
+            self.log("⚠️ 续期请求返回 419，账单可能已创建但页面未跳转，开始延长轮询账单...")
+        else:
+            self.log(f"⚠️ 提交成功但未自动跳转，响应URL: {response.url} | 状态码: {response.status_code}")
+            self.log("后置轮询检查账单...")
+
+        return self.check_and_pay_invoices(service_id, is_precheck=False, retries=6, retry_delay=8)
+
     def init(self):
         self.log("正在验证登录状态...")
         try:
@@ -291,24 +329,7 @@ class HidenCloudBot:
             res = self.request('POST', f"/service/{service['id']}/renew", data=payload, headers=headers)
 
             # ================== 5. 结果校验与支付 ==================
-            if '/invoice/' in res.url:
-                self.log("⚡️ 续期成功，已跳转账单页，自动执行支付...")
-                self.perform_pay_from_html(res.text, res.url)
-            else:
-                soup_resp = BeautifulSoup(res.text, 'html.parser')
-                for a in soup_resp.find_all('a', href=True):
-                    if '/invoice/' in a['href']:
-                        self.log(f"🔗 在响应HTML中发现账单链接: {a['href']}")
-                        self.pay_single_invoice(a['href'])
-                        return
-
-                err_div = soup_resp.find('div', class_=re.compile(r'(alert-danger|text-danger|error)'))
-                if err_div:
-                    self.log(f"⚠️ 续期请求被服务端拒绝，页面提示: {err_div.get_text(strip=True)}")
-                else:
-                    self.log(f"⚠️ 提交成功但未自动跳转，响应URL: {res.url} | 状态码: {res.status_code}")
-                    self.log("后置轮询检查账单...")
-                    self.check_and_pay_invoices(service['id'], is_precheck=False, retries=3)
+            self.try_handle_invoice_from_response(service['id'], res)
 
         except Exception as e:
             self.log(f"处理异常: {e}")
@@ -316,7 +337,7 @@ class HidenCloudBot:
             # 每处理完一个服务保存一次 Cookie，而非每次请求都上传
             self.save_cookies(upload=True)
 
-    def check_and_pay_invoices(self, service_id, is_precheck=False, retries=1):
+    def check_and_pay_invoices(self, service_id, is_precheck=False, retries=1, retry_delay=5):
         if not is_precheck:
             sleep_random(2000, 3000)
 
@@ -324,12 +345,7 @@ class HidenCloudBot:
             try:
                 res = self.request('GET', f"/service/{service_id}/invoices?where=unpaid")
                 soup = BeautifulSoup(res.text, 'html.parser')
-
-                invoice_links = []
-                for a in soup.find_all('a', href=True):
-                    href = a['href']
-                    if '/invoice/' in href and 'download' not in href:
-                        invoice_links.append(href)
+                invoice_links = self.extract_invoice_links(soup)
 
                 # 过滤掉本次运行中已处理过的账单，避免重复操作
                 unique_invoices = [url for url in set(invoice_links)
@@ -337,28 +353,29 @@ class HidenCloudBot:
 
                 if not unique_invoices:
                     if retries > 1 and attempt < retries - 1:
-                        self.log(f"⚪ 第{attempt+1}次检查无新账单，5秒后重试...")
-                        time.sleep(5)
+                        self.log(f"⚪ 第{attempt+1}次检查无新账单，{retry_delay}秒后重试...")
+                        time.sleep(retry_delay)
                         continue
                     if not is_precheck:
                         self.log("⚪ 无未支付账单")
-                    return
+                    return False
 
                 self.log(f"🔍 发现 {len(unique_invoices)} 个未付账单，准备清理...")
                 for url in unique_invoices:
                     self.pay_single_invoice(url)
                     sleep_random(3000, 5000)
-                return
+                return True
 
             except Exception as e:
                 self.log(f"查账单出错: {e}")
-                return
+                return False
 
     def pay_single_invoice(self, url):
+        normalized_url = self.normalize_url(url)
         try:
-            self.log(f"📄 打开账单: {url}")
-            res = self.request('GET', url)
-            self.perform_pay_from_html(res.text, url)
+            self.log(f"📄 打开账单: {normalized_url}")
+            res = self.request('GET', normalized_url)
+            self.perform_pay_from_html(res.text, normalized_url)
         except Exception as e:
             self.log(f"访问账单失败: {e}")
 
@@ -391,6 +408,10 @@ class HidenCloudBot:
                         self.log(f"🔁 降级匹配到支付表单: {action}")
                         break
 
+        if not target_form:
+            self.log("⚠️ 未找到可用的支付表单，可能账单已支付或页面结构变更")
+            return
+
         payload = {}
         for inp in target_form.find_all('input'):
             name = inp.get('name')
@@ -400,12 +421,13 @@ class HidenCloudBot:
 
         self.log("👉 提交支付...")
         try:
+            action_url = self.normalize_url(target_action)
             headers = {'X-CSRF-TOKEN': self.csrf_token, 'Referer': current_url}
-            res = self.request('POST', target_action, data=payload, headers=headers)
+            res = self.request('POST', action_url, data=payload, headers=headers)
 
             if res.status_code == 200:
                 self.log("✅ 支付成功！")
-                self.processed_invoices.add(current_url)
+                self.processed_invoices.add(self.normalize_url(current_url))
             else:
                 self.log(f"⚠️ 支付响应: {res.status_code}")
         except Exception as e:
