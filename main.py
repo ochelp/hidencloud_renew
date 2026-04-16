@@ -12,6 +12,7 @@ import requests
 import cloudscraper
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, unquote
+from notify import send_notify
 try:
     from cookie_context import normalize_cookie_records, parse_seed_cookie_string, success_path_label
 except ModuleNotFoundError:
@@ -109,37 +110,6 @@ ALL_LOGS = []
 def log_print(msg):
     print(msg)
     ALL_LOGS.append(str(msg))
-
-# ================= 消息推送模块 =================
-def send_notify(text, desp):
-    token = os.environ.get("WP_APP_TOKEN_ONE")
-    uids_str = os.environ.get("WP_UIDs")
-
-    if not token or not uids_str:
-        log_print("⚠️ 未配置 WxPusher，跳过推送")
-        return
-
-    log_print(f"\n==== 开始推送通知: {text} ====\n")
-
-    uids = [u.strip() for u in re.split(r'[,;\n]', uids_str) if u.strip()]
-
-    url = 'https://wxpusher.zjiecode.com/api/send/message'
-    data = {
-        "appToken": token,
-        "content": f"<h3>{text}</h3><br><div style='font-size:14px;'>{desp.replace(chr(10), '<br>')}</div>",
-        "summary": text,
-        "contentType": 2,
-        "uids": uids
-    }
-
-    try:
-        res = requests.post(url, json=data)
-        if res.status_code == 200:
-            print("✅ WxPusher 推送成功")
-        else:
-            print(f"❌ WxPusher 推送响应: {res.text}")
-    except Exception as e:
-        print(f"❌ WxPusher 推送失败: {e}")
 
 # ================= WebDAV 模块 =================
 class WebDavManager:

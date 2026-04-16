@@ -1,94 +1,310 @@
-# HidenCloud Auto Renew (Python版)
+# HidenCloud Auto Renew（Python 版）
 
 ![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)
 ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-Automated-green.svg)
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 
-基于 Python 编写的 HidenCloud (海敦云) 自动续期与支付脚本，专为 GitHub Actions 设计。
+基于 Python 编写的 HidenCloud（海敦云）自动续期与支付脚本，专为 GitHub Actions 设计。
 
-✨ **核心亮点：使用 Infinicloud (WebDAV) 同步 Cookie，无需 Git 提交权限，支持将仓库设置为 Public (公开)，保障账号安全。**
+✨ **核心亮点：**
 
-## 🚀 功能特性
+- 自动续期 + 自动支付
+- 使用 Infinicloud（WebDAV）持久化 Cookie
+- 支持 **青龙风格全渠道通知**
+- 运行时采用 **单选渠道**
+- **默认使用 wxpusher**
+- 中文日志与通知正文按 **UTF-8** 处理，尽量避免乱码
 
-- **自动续期**：自动检测服务并延长 10 天有效期。
-- **自动支付**：续期后自动识别账单并完成 0 元支付（或余额支付）。
+---
+
+## 功能特性
+
+- **自动续期**：自动检测服务并延长有效期
+- **自动支付**：续期后自动识别账单并支付
 - **Cookie 持久化**：
-  - 自动将最新 Cookie 上传至 Infinicloud (WebDAV)。
-  - 脚本运行时优先读取云端缓存，防止 Cookie 过期。
-  - **安全优势**：敏感数据不存储在 GitHub 仓库文件中，仓库可公开。
-- **消息推送**：集成 WxPusher，任务完成后通过微信即时通知。
-- **多账号支持**：支持配置多个账号，批量管理。
-- **失败重试**：网络波动或 Cookie 失效时自动回退重试。
+  - 自动将最新 Cookie 上传到 Infinicloud（WebDAV）
+  - 脚本运行时优先读取云端缓存，减少 Cookie 失效影响
+- **单选通知渠道**：
+  - 默认 `wxpusher`
+  - 支持青龙风格通知渠道：
+    - `wxpusher`
+    - `serverchan`
+    - `telegram`
+    - `dingtalk`
+    - `wework_bot`
+    - `wework_app`
+    - `feishu`
+    - `bark`
+    - `pushplus`
+    - `gotify`
+    - `gocqhttp`
+    - `pushdeer`
+    - `chat`
+    - `aibotk`
+    - `igot`
+    - `weplusbot`
+    - `email`
+    - `pushme`
+    - `webhook`
+    - `chronocat`
+    - `ntfy`
+- **多账号支持**：支持多个账号批量运行
+- **失败重试**：支持 GitHub Actions 二次重跑
 
-## 🛠️ 部署指南
+---
+
+## 部署指南
 
 ### 1. 准备工作
 
-*   **GitHub 账号**：用于 Fork 本项目。
-*   **HidenCloud 账号**：获取初始 Cookie。
-*   **Infinicloud 账号**：[注册地址](https://infini-cloud.net/)，用于存储 Cookie JSON 文件。
-*   **WxPusher**：[注册地址](https://wxpusher.zjiecode.com/admin/)，用于接收通知。
+- GitHub 账号
+- HidenCloud 账号
+- Infinicloud 账号：用于存储 Cookie JSON 文件
+- 至少一个通知渠道账号/机器人配置（默认推荐 wxpusher）
 
-### 2. 获取配置信息
+### 2. 获取 HidenCloud Cookie
 
-#### A. 获取 HidenCloud Cookie
-1. 浏览器打开 HidenCloud 控制台并登录。
-2. 按 `F12` 打开开发者工具，点击 **网络(Network)** 标签。
-3. 刷新页面，点击第一个请求（通常是 dashboard），在 **请求头(Request Headers)** 中找到 `Cookie`。
-4. 复制整个 Cookie 字符串。
+1. 浏览器打开 HidenCloud 控制台并登录
+2. 按 `F12` 打开开发者工具，切到 **Network**
+3. 刷新页面，点击任意已登录请求
+4. 在请求头中复制完整 `Cookie`
 
-#### B. 获取 Infinicloud WebDAV 信息
-1. 登录 Infinicloud，进入 **My Page**。
-2. 开启 **Apps Connection**。
-3. 记录以下信息：
-   - **WebDAV URL**: (例如 `https://sv10.infinicloud.com/dav/`)
-   - **Connection ID**: (作为用户名)
-   - **Apps Password**: (作为密码)
+### 3. 获取 Infinicloud WebDAV 信息
 
-#### C. 获取 WxPusher 信息
-1. 创建一个新的应用，获取 `APP_TOKEN`。
-2. 扫码关注应用，在“我的”->“用户UID”中获取 `UID`。
+1. 登录 Infinicloud
+2. 进入 **My Page**
+3. 开启 **Apps Connection**
+4. 记录：
+   - `WEBDAV_URL`
+   - `WEBDAV_USER`
+   - `WEBDAV_PASS`
 
-### 3. 配置 GitHub Secrets
+---
 
-在你的 GitHub 仓库中，点击 **Settings** -> **Secrets and variables** -> **Actions** -> **New repository secret**，添加以下变量：
+## 通知说明
 
-| 变量名 (Name) | 是否必填 | 说明 |
-| :--- | :---: | :--- |
-| **HIDEN_COOKIE** | ✅ | 初始 Cookie。多账号请用换行或 `&` 分隔 |
-| **WP_APP_TOKEN_ONE** | ✅ | WxPusher 应用 Token |
-| **WP_UIDs** | ✅ | WxPusher 用户 UID (多人用分号分隔) |
-| **WEBDAV_URL** | ✅ | Infinicloud WebDAV 地址 (末尾带 `/`) |
-| **WEBDAV_USER** | ✅ | Infinicloud Connection ID |
-| **WEBDAV_PASS** | ✅ | Infinicloud Apps Password |
+### 运行模式
 
-### 4. 启动运行
+- 只发送 **一个** 通知渠道
+- 通过 `NOTIFY_CHANNEL` 指定渠道
+- **不填 `NOTIFY_CHANNEL` 时默认使用 `wxpusher`**
 
-1. 点击仓库上方的 **Actions** 标签。
-2. 在左侧选择 **HidenCloud Auto Renew (Python)**。
-3. 点击右侧的 **Run workflow** 手动触发一次测试。
-4. 检查 Infinicloud 中是否生成了 `hiden_cookies.json` 文件，并查收微信推送。
+### 渠道选择示例
 
-之后脚本将按照配置的时间（默认为北京时间每天上午 10:00）自动运行。
+将 `NOTIFY_CHANNEL` 配置为以下任一值：
 
-## 📂 文件结构
+| 值 | 说明 |
+|---|---|
+| `wxpusher` | 默认渠道 |
+| `serverchan` | Server 酱 |
+| `telegram` | Telegram Bot |
+| `dingtalk` | 钉钉机器人 |
+| `wework_bot` | 企业微信机器人 |
+| `wework_app` | 企业微信应用 |
+| `feishu` | 飞书机器人 |
+| `bark` | Bark |
+| `pushplus` | PushPlus |
+| `gotify` | Gotify |
+| `gocqhttp` | go-cqhttp |
+| `pushdeer` | PushDeer |
+| `chat` | Synology Chat |
+| `aibotk` | 智能微秘书 |
+| `igot` | iGot |
+| `weplusbot` | 微加机器人 |
+| `email` | SMTP 邮件 |
+| `pushme` | PushMe |
+| `webhook` | 自定义 Webhook |
+| `chronocat` | Chronocat |
+| `ntfy` | ntfy |
+
+> 建议把 `NOTIFY_CHANNEL` 放在 GitHub **Repository Variables** 中，其余敏感值放在 **Repository Secrets** 中。
+
+### WxPusher 兼容说明
+
+当前项目兼容两套 WxPusher 变量：
+
+- **旧版项目变量**
+  - `WP_APP_TOKEN_ONE`
+  - `WP_UIDs`
+- **青龙风格变量**
+  - `WXPUSHER_APP_TOKEN`
+  - `WXPUSHER_TOPIC_IDS`
+  - `WXPUSHER_UIDS`
+
+如果你以前已经在用本项目的 WxPusher 配置，**升级后可以不改配置继续使用**。
+
+---
+
+## GitHub Actions 配置
+
+### 1. 必填配置
+
+#### Repository Secrets
+
+| 名称 | 是否必填 | 说明 |
+|---|:---:|---|
+| `HIDEN_COOKIE` | ✅ | 初始 Cookie。多账号用换行或 `&` 分隔 |
+| `WEBDAV_URL` | ✅ | Infinicloud WebDAV 地址 |
+| `WEBDAV_USER` | ✅ | Infinicloud 用户名 |
+| `WEBDAV_PASS` | ✅ | Infinicloud 密码 |
+
+#### Repository Variables
+
+| 名称 | 是否必填 | 说明 |
+|---|:---:|---|
+| `NOTIFY_CHANNEL` | ❌ | 选中的通知渠道；不填默认 `wxpusher` |
+
+### 2. 各通知渠道配置
+
+只需要配置**当前所选渠道**对应的变量即可。
+
+#### wxpusher
+
+| 名称 | 说明 |
+|---|---|
+| `WP_APP_TOKEN_ONE` | 旧版 app token |
+| `WP_UIDs` | 旧版 UID，多个用 `;` 分隔 |
+| `WXPUSHER_APP_TOKEN` | 青龙风格 app token |
+| `WXPUSHER_TOPIC_IDS` | 主题 ID，多个用 `;` 分隔 |
+| `WXPUSHER_UIDS` | UID，多个用 `;` 分隔 |
+
+#### Server 酱
+
+| 名称 | 说明 |
+|---|---|
+| `PUSH_KEY` | 青龙常用变量 |
+| `SERVERCHAN_SENDKEY` | 兼容别名 |
+
+#### Telegram
+
+| 名称 | 说明 |
+|---|---|
+| `TG_BOT_TOKEN` | 机器人 Token |
+| `TG_CHAT_ID` | 推荐使用 |
+| `TG_USER_ID` | 兼容旧写法 |
+| `TG_API_HOST` | 可选，自定义 API Host |
+| `TG_PROXY_AUTH` / `TG_PROXY_HOST` / `TG_PROXY_PORT` | 可选，代理配置 |
+
+#### 钉钉
+
+| 名称 | 说明 |
+|---|---|
+| `DD_BOT_TOKEN` | 机器人 Token |
+| `DD_BOT_SECRET` | 可选，签名密钥 |
+
+#### 企业微信机器人
+
+| 名称 | 说明 |
+|---|---|
+| `QYWX_KEY` | 机器人 key |
+| `QYWX_ORIGIN` | 可选，企业微信代理地址 |
+
+#### 企业微信应用
+
+| 名称 | 说明 |
+|---|---|
+| `QYWX_AM` | `corpid,corpsecret,touser,agentid[,media_id]` |
+| `QYWX_ORIGIN` | 可选，企业微信代理地址 |
+
+#### 飞书
+
+| 名称 | 说明 |
+|---|---|
+| `FEISHU_WEBHOOK` | 直接 webhook 地址 |
+| `FEISHU_SECRET` | 可选，签名密钥 |
+| `FSKEY` | 兼容青龙旧变量 |
+| `FSSECRET` | 兼容青龙旧变量 |
+
+#### Bark
+
+| 名称 | 说明 |
+|---|---|
+| `BARK_PUSH` | Bark 地址或设备码 |
+| `BARK_ARCHIVE` / `BARK_GROUP` / `BARK_SOUND` / `BARK_ICON` / `BARK_LEVEL` / `BARK_URL` | 可选参数 |
+
+#### PushPlus
+
+| 名称 | 说明 |
+|---|---|
+| `PUSH_PLUS_TOKEN` | 青龙常用变量 |
+| `PUSHPLUS_TOKEN` | 兼容别名 |
+| `PUSH_PLUS_USER` | 群组编码 |
+| `PUSH_PLUS_TEMPLATE` | 模板类型 |
+| `PUSH_PLUS_CHANNEL` | 渠道 |
+| `PUSH_PLUS_WEBHOOK` | webhook 编码 |
+| `PUSH_PLUS_CALLBACKURL` | 回调地址 |
+| `PUSH_PLUS_TO` | 好友令牌 / 企业微信用户 ID |
+
+#### 其他渠道
+
+| 渠道 | 变量 |
+|---|---|
+| `gotify` | `GOTIFY_URL` `GOTIFY_TOKEN` `GOTIFY_PRIORITY` |
+| `gocqhttp` | `GOBOT_URL` `GOBOT_QQ` `GOBOT_TOKEN` |
+| `pushdeer` | `DEER_KEY` / `PUSHDEER_KEY`，可选 `DEER_URL` |
+| `chat` | `CHAT_URL` `CHAT_TOKEN` |
+| `aibotk` | `AIBOTK_KEY` `AIBOTK_TYPE` `AIBOTK_NAME` |
+| `igot` | `IGOT_PUSH_KEY` |
+| `weplusbot` | `WE_PLUS_BOT_TOKEN` `WE_PLUS_BOT_RECEIVER` `WE_PLUS_BOT_VERSION` |
+| `email` | `SMTP_SERVER` `SMTP_SSL` `SMTP_EMAIL` `SMTP_PASSWORD` `SMTP_NAME`，可选 `SMTP_TO_EMAIL` |
+| `pushme` | `PUSHME_KEY`，可选 `PUSHME_URL` |
+| `webhook` | `WEBHOOK_URL` `WEBHOOK_METHOD` `WEBHOOK_BODY` `WEBHOOK_HEADERS` `WEBHOOK_CONTENT_TYPE` |
+| `chronocat` | `CHRONOCAT_QQ` `CHRONOCAT_TOKEN` `CHRONOCAT_URL` |
+| `ntfy` | `NTFY_URL` `NTFY_TOPIC`，可选 `NTFY_PRIORITY` `NTFY_TOKEN` `NTFY_USERNAME` `NTFY_PASSWORD` `NTFY_ACTIONS` |
+
+---
+
+## 启动运行
+
+1. Fork 本项目
+2. 配置好 `Secrets` 与 `Variables`
+3. 打开 GitHub 仓库的 **Actions**
+4. 选择 **HidenCloud Auto Renew (Python)**
+5. 点击 **Run workflow**
+6. 检查：
+   - Infinicloud 是否生成 `hiden_cookies.json`
+   - 通知是否成功送达
+
+脚本默认按 GitHub Actions 定时运行，并会在失败时延迟再试一次。
+
+---
+
+## 文件结构
 
 ```text
 .
 ├── .github/workflows/
-│   └── main.yml        # GitHub Actions 配置文件
-├── main.py             # Python 核心运行脚本
-├── requirements.txt    # Python 依赖库
-└── README.md           # 说明文档
+│   ├── cron.yml
+│   └── main.yml
+├── main.py
+├── notify.py
+├── requirements.txt
+├── tests/
+│   └── test_notify.py
+└── README.md
 ```
-
-## ⚠️ 免责声明
-
-1. 本项目仅供学习交流使用，请勿用于非法用途。
-2. 脚本涉及账号操作，作者不对因使用本脚本造成的账号封禁、资金损失等后果负责。
-3. 请妥善保管你的 Secrets 配置，不要分享给他人。
-4. 虽然使用了 WebDAV 分离敏感数据，但建议定期修改密码和检查 Cookie 状态。
 
 ---
-**如果这个项目对你有帮助，请给一个 Star ⭐️**
-```
+
+## 编码与中文输出
+
+项目已按 UTF-8 处理中文内容：
+
+- Python 文件使用 UTF-8
+- GitHub Actions 中设置：
+  - `PYTHONUTF8=1`
+  - `PYTHONIOENCODING=UTF-8`
+- 通知 JSON / 文本正文尽量使用 UTF-8 发送
+
+---
+
+## 免责声明
+
+1. 本项目仅供学习交流使用，请勿用于非法用途
+2. 脚本涉及账号操作，作者不对由此造成的损失负责
+3. 请妥善保管你的 Secrets 与 Variables
+4. 建议定期检查 Cookie 状态与通知配置
+
+---
+
+如果这个项目对你有帮助，欢迎点个 Star ⭐
