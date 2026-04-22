@@ -13,7 +13,7 @@ jobs:
       steps:
         - uses: actions/checkout@v4
           with:
-            token: ${{ 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 }}
+            token: ${{ secrets.PAT }}
 
         - name: random cron
           shell: bash
