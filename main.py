@@ -100,7 +100,7 @@ except ModuleNotFoundError:
         return '进入成功路径'
 
 # ================= 配置常量 =================
-RENEW_DAYS = 1
+RENEW_DAYS = 3
 CACHE_FILE_NAME = 'hiden_cookies.json'
 LOCAL_CACHE_PATH = os.path.join(os.path.dirname(__file__), CACHE_FILE_NAME)
 
